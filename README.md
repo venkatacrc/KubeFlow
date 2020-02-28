@@ -138,6 +138,48 @@ stdout:
 [ℹ]  deploying stack "eksctl-kubeflowcluster-cluster"
 ```
 
+The cluster is ready when you see the below messages.
+```
+[✔]  all EKS cluster resources for "kubeflowcluster" have been created
+[✔]  saved kubeconfig as "/home/ec2-user/.kube/eksctl/clusters/kubeflowcluster"
+[ℹ]  adding identity "arn:aws:iam::657200647525:role/eksctl-kubeflowcluster-nodegroup-NodeInstanceRole-1IZR32KNXRPZI" to auth ConfigMap
+[ℹ]  nodegroup "cpu-nodes" has 0 node(s)
+[ℹ]  waiting for at least 5 node(s) to become ready in "cpu-nodes"
+[ℹ]  nodegroup "cpu-nodes" has 5 node(s)
+[ℹ]  node "ip-192-168-1-52.us-west-2.compute.internal" is ready
+[ℹ]  node "ip-192-168-15-134.us-west-2.compute.internal" is ready
+[ℹ]  node "ip-192-168-27-101.us-west-2.compute.internal" is ready
+[ℹ]  node "ip-192-168-6-160.us-west-2.compute.internal" is ready
+[ℹ]  node "ip-192-168-9-235.us-west-2.compute.internal" is ready
+[ℹ]  kubectl command should work with "/home/ec2-user/.kube/eksctl/clusters/kubeflowcluster", try 'kubectl --kubeconfig=/home/ec2-user/.kube/eksctl/clusters/kubeflowcluster get nodes'
+[✔]  EKS cluster "kubeflowcluster" in "us-west-2" region is ready
+```
 
+Finish Setting up the cluster.
 
+```
+### Source the environment
+source ~/.bash_profile
+
+### Create more environment variables
+export STACK_NAME=$(eksctl get nodegroup --cluster ${AWS_CLUSTER_NAME} -o json | jq -r '.[].StackName')
+echo "export STACK_NAME=${STACK_NAME}" | tee -a ~/.bash_profile
+
+export INSTANCE_ROLE_NAME=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --output text --query "Stacks[0].Outputs[1].OutputValue" | sed -e 's/.*\///g')
+echo "export INSTANCE_ROLE_NAME=${INSTANCE_ROLE_NAME}" | tee -a ~/.bash_profile
+
+export INSTANCE_PROFILE_ARN=$(aws cloudformation describe-stacks --stack-name $STACK_NAME | jq -r '.Stacks[].Outputs[] | select(.OutputKey=="InstanceProfileARN") | .OutputValue')
+echo "export INSTANCE_PROFILE_ARN=${INSTANCE_PROFILE_ARN}" | tee -a ~/.bash_profile
+
+#### Allow Access from/to the Elastic Container Registry (ECR)
+# This allows our cluster worker nodes to load custom Docker images (ie. models) from ECR.  We will load these custom Docker images in a later section.
+aws iam attach-role-policy --role-name $INSTANCE_ROLE_NAME --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+
+### Associated IAM and OIDC
+# To use IAM roles for service accounts in your cluster, you must create an OIDC identity provider in the IAM console.  See https://docs.aws.amazon.com/eks/latest/userguide/enable-iam-roles-for-service-accounts.html for more info.
+eksctl utils associate-iam-oidc-provider --cluster ${AWS_CLUSTER_NAME} --approve
+aws eks describe-cluster --name ${AWS_CLUSTER_NAME} --region ${AWS_REGION} --query "cluster.identity.oidc.issuer" --output text
+
+echo "Completed"
+```
 
